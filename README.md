@@ -2,7 +2,7 @@
 
 # What is this?
 
-<img align="right" width="128" src="paper/images/final-render.png" alt="" />
+<img align="right" width="256" src="paper/images/final-render.png" alt="" />
 
 I came up with this algorithm one day on my way home from work. I decided to try it out and I really liked the effects of it, so I wrote a short paper on how it works. 🤓
 
