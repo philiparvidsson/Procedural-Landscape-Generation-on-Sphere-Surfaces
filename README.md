@@ -4,9 +4,9 @@
 
 <img align="right" width="292" src="paper/images/final-render.png" alt="" />
 
-I came up with this algorithm one day on my way home from work. I decided to try it out and I really liked the effects of it, so I wrote a short paper on how it works. 🤓
+I came up with this algorithm one day on my way home from work. Not knowing whether it'd work, I felt that I had to try and implement it to see its effect. I really liked the results, so I wrote a short paper on it in case anyone wants to implement it or build upon it further. 🤓
 
-### [Click here to read the paper](http://philiparvidsson.com/procedural-landscape-generation-on-sphere-surfaces.pdf)
+### [Click here to read the paper.](http://philiparvidsson.com/procedural-landscape-generation-on-sphere-surfaces.pdf)
 
 ## Running the demo
 
