@@ -1,0 +1,6 @@
+# Gradle
+.gradle/
+
+# Build intermediates and outputs
+paper/aux_/
+paper/bin/

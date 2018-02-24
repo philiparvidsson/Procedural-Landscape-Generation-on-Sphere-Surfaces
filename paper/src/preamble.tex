@@ -1,0 +1,91 @@
+\documentclass[9pt]{extreport}
+\usepackage[a4paper,margin=2cm]{geometry}
+
+% English hyphenation rules.
+\usepackage[english]{babel}
+
+% Fonts.
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+
+% Enable UTF-8.
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Indent paragraphs more and separate them vertically a bit.
+\setlength{\parindent}{1.4em}
+\setlength{\parskip}{0.8ex}
+\linespread{0.92}
+
+% Improve justification, etc.
+\usepackage{microtype}
+
+% Clickable links (e.g., click chapters in table of contents to navigate to chapters).
+\usepackage[hidelinks]{hyperref}
+
+% Multiple columns.
+\usepackage{multicol}
+
+\usepackage{graphicx}
+\graphicspath{{../images/}}
+
+% Harvard style references.
+\usepackage[numbers,sort]{natbib}
+\bibliographystyle{apalike}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\usepackage{framed}
+
+\makeatletter
+
+\newcommand\fig[2]{%
+  \medskip
+  \noindent
+  \begin{minipage}{\columnwidth}
+  \centering%
+  #1\par
+  \textit{#2}
+  \end{minipage}
+  \medskip
+  \@afterindentfalse\@afterheading}
+
+\renewcommand\maketitle{
+  \begin{center}
+    {\@title\par}
+    \vskip5mm
+    {\large
+      \begin{tabular}[t]{c}
+        \@author%
+      \end{tabular}\par}
+      \vskip5mm
+    {\large\@date\par}
+  \end{center}\par
+}
+
+\renewcommand\chapter{\global\@topnum\z@
+                 \@afterindentfalse%
+                 \secdef\@chapter\@schapter}
+
+\renewcommand\section{\@startsection{section}{1}{\z@}
+                               {0em}
+                               {0em}
+                               {\bfseries}}
+
+\def\@makechapterhead#1{
+  \par
+  {\center%
+   \interlinepenalty\@M%
+   \bfseries\lsstyle\scshape \thechapter. #1\par\nobreak}}
+
+\def\@makeschapterhead#1{%
+  \par
+  {\center%
+   \interlinepenalty\@M%
+   \bfseries\lsstyle\scshape #1\par\nobreak}}
+
+\makeatother

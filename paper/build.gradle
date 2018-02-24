@@ -1,0 +1,75 @@
+/*--------------------------------------
+ * Constants.
+ *------------------------------------*/
+
+ext {
+  documentName = 'main'
+
+  srcDir = './src'
+
+  auxDir = './aux_' // <-- Apparently, "aux" is an invalid name on Windows.
+  binDir = './bin'
+}
+
+/*--------------------------------------
+ * Classes.
+ *------------------------------------*/
+
+/**
+ * Provides a task class for LaTeX operations, such as compiling documents with `pdflatex`.
+ */
+class LaTeX extends DefaultTask {
+  // Array of arrays - each element (i.e., inner array) is a call to pdflatex.
+  private def mArgs = []
+
+  void bibtex(String ...args) {
+    mArgs << [ 'bibtex', *args ]
+  }
+
+  void pdflatex(String ...args) {
+    args += [ "--aux-directory=$project.auxDir"
+            , '--c-style-errors'
+            , '--halt-on-error'
+            , "--include-directory=$project.srcDir"
+            , "--job-name=$project.documentName"
+            , "--output-directory=$project.binDir"
+            ]
+
+    mArgs << [ 'pdflatex', *args ]
+  }
+
+  @TaskAction
+  private void run() {
+    mArgs.each {
+      def proc = it.execute()
+      proc.waitForProcessOutput(System.out, System.err)
+      def r = proc.exitValue()
+      if (r != 0) {
+        def msg = "The execution failed (exit code was $r) for command: ${it.join(' ')}"
+        throw new GradleException(msg)
+      }
+    }
+  }
+}
+
+/*--------------------------------------
+ * Tasks.
+ *------------------------------------*/
+
+task build(type: LaTeX) {
+  description 'Compiles the LaTeX source files into a PDF.'
+  pdflatex "$srcDir/$documentName"
+  bibtex   "$auxDir/$documentName"
+  pdflatex "$srcDir/$documentName"
+}
+
+task clean(type: Delete) {
+  description 'Removes files produced by the `build` task.'
+  delete auxDir, binDir
+}
+
+/*--------------------------------------
+ * Entry point.
+ *------------------------------------*/
+
+tasks.each { it.description && !it.group && (it.group = project.name) }

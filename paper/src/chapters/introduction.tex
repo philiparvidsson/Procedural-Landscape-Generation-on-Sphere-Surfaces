@@ -1,0 +1,16 @@
+\chapter{Introduction}
+
+Commonly, modeling the fractal nature of planet-like features is done by applying a noise
+algorithm---e.g., Perlin Noise \citep{perlin83}---to a sphere surface, using \textsc{uv}-coordinates
+(and, sometimes, \textsc{uvw}-coordinates, when a three-dimensional noise function is used) as
+inputs to the noise function, in effect, applying a texture to the sphere surface in some sense.
+The planet-like features can then be visualized in a number of ways; for example, using the noise
+texture simply for coloring the surface of the sphere (\textit{texture mapping}).  This, however,
+will not provide a very intersting result, since it will not affect the sphere's lighting---an
+important factor when it comes to visual realism.  Taking it a step further, the texture can be
+applied as a \textit{bump map}.  A bump map will affect the sphere's lighting, but not its physical
+surface \citep{blinn78}, limiting the applicable cases to those that do not put high demands on
+visual realism, or to model surface details rather than large surface displacements.
+
+Here, an algorithm is proposed for generating planet-like features on a sphere surface by displacing
+its geometry iteratively, doing a simple transformation for each iteration.
