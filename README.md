@@ -11,6 +11,8 @@ I came up with this algorithm one day on my way home from work. Not knowing whet
 
 Your browser should display a sphere in 3D.  The sphere mesh is very high-resolution so give it a few minutes to complete (the sphere will stop morphing when it's done).
 
+### [Click here to run the demo.](http://philiparvidsson.com/demos/procedural-landscape-generation-on-sphere-surfaces/index.html)
+
 ## Video
 Here's a video of the algorithm being applied to a low-resolution mesh in real-time:
 
