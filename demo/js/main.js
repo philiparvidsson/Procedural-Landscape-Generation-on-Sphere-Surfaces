@@ -1,542 +1,457 @@
-(function() {
-  class Vector {
-    constructor(x, y, z) {
-      this.x = x || 0
-      this.y = y || 0
-      this.z = z || 0
+class TriangleMesh {
+  constructor(vertices, triangles) {
+    console.log('vertices:', vertices.length/3, 'triangles:', triangles.length/3)
+
+    this.vertices  = new Float32Array(vertices)
+    this.normals   = new Float32Array(vertices.length)
+    this.triangles = new Uint32Array(triangles)
+
+    this.modelMatrix = mat4.create()
+    mat4.identity(this.modelMatrix)
+
+    this.requiresUpdate = true
+  }
+
+  computeNormals() {
+    const vertices  = this.vertices
+    const normals   = this.normals
+    const triangles = this.triangles
+
+    var i
+
+    for (i = 0; i < normals.length; i += 3) {
+      normals[i  ] = 0
+      normals[i+1] = 0
+      normals[i+2] = 0
     }
 
-    normalize() {
-      const r = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z)
-      if (r < 0.0001) {
-        return new Vector(this.x, this.y, this.z)
-      }
+    for (i = 0; i < triangles.length; i += 3) {
+      const a = 3*triangles[i  ]
+      const b = 3*triangles[i+1]
+      const c = 3*triangles[i+2]
 
-      return new Vector(this.x / r, this.y / r, this.z / r)
-    }
+      const ax = vertices[a  ]
+      const ay = vertices[a+1]
+      const az = vertices[a+2]
 
-    scale(a) {
-      return new Vector(this.x * a, this.y * a, this.z * a)
-    }
+      const bx = vertices[b  ]
+      const by = vertices[b+1]
+      const bz = vertices[b+2]
 
-    length() {
-      return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z)
+      const cx = vertices[c  ]
+      const cy = vertices[c+1]
+      const cz = vertices[c+2]
+
+      const px = bx - ax
+      const py = by - ay
+      const pz = bz - az
+
+      const qx = cx - ax
+      const qy = cy - ay
+      const qz = cz - az
+
+      const nx = py*qz - pz*qy
+      const ny = pz*qx - px*qz
+      const nz = px*qy - py*qx
+
+      normals[a  ] += nx
+      normals[a+1] += ny
+      normals[a+2] += nz
+
+      normals[b  ] += nx
+      normals[b+1] += ny
+      normals[b+2] += nz
+
+      normals[c  ] += nx
+      normals[c+1] += ny
+      normals[c+2] += nz
     }
   }
 
-  class Triangle {
-    constructor(a, b, c) {
-      this.a = a
-      this.b = b
-      this.c = c
+  updateBuffers(gl) {
+    if (!this.requiresUpdate) {
+      return
+    }
 
-      this.normal = new Vector()
+    this.requiresUpdate = false
+
+    this.computeNormals()
+
+    if (!this.vertexBuffer) {
+      this.vertexBuffer = gl.createBuffer()
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
+      gl.bufferData(gl.ARRAY_BUFFER, this.vertices, gl.DYNAMIC_DRAW)
+    } else {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertices, 0, this.vertices.length)
+    }
+
+    if (!this.normalBuffer) {
+      this.normalBuffer = gl.createBuffer()
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer)
+      gl.bufferData(gl.ARRAY_BUFFER, this.normals, gl.DYNAMIC_DRAW)
+    } else {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer)
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.normals, 0, this.normals.length)
+    }
+
+    if (!this.indexBuffer) {
+      this.indexBuffer = gl.createBuffer()
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.triangles, gl.DYNAMIC_DRAW)
     }
   }
 
-  class VertexBuffer {
-    constructor(gl, vertices, normals, triangles) {
-      this.gl = gl
+  static quad(width, height) {
+    const vertices = [ -width/2, -height/2, 0
+                     , -width/2,  height/2, 0
+                     ,  width/2,  height/2, 0
+                     ,  width/2, -height/2, 0
+                     ]
 
-      this.vbo = gl.createBuffer()
-      this.nbo = gl.createBuffer()
+    const triangles = [ 0, 1, 2
+                      , 2, 3, 0
+                      ]
 
-      this.vertices = vertices
-      this.normals = normals
-      this.triangles = triangles
+    return new TriangleMesh(vertices, triangles)
+  }
 
-      this.update()
+  static sphere(radius, m, n) {
+    const vertices = new Array(3 * (m * n + 2))
+
+    const vertex = (i, x, y, z) => { vertices[3*i] = x; vertices[3*i+1] = y; vertices[3*i+2] = z }
+
+    vertex(0, 0, radius, 0)
+
+    for (var i = 0; i < m; i++) {
+      const theta1 = Math.PI * (i+1)/(m+1)
+      const sin1 = Math.sin(theta1)
+      const cos1 = Math.cos(theta1)
+
+      for (var j = 0; j < n; j++) {
+        const theta2 = 2*Math.PI * (j % n) / n
+        const sin2 = Math.sin(theta2)
+        const cos2 = Math.cos(theta2)
+
+        vertex(i*n + j+1, radius*sin1*cos2, radius*cos1, radius*sin1*sin2)
+      }
     }
 
-    update() {
-      const gl = this.gl
+    vertex(vertices.length/3-1, 0, -radius, 0)
 
-      const v = []
-      const n = []
+    const triangles = []
 
-      const tris = this.triangles
-      for (i = 0; i < tris.length; i++) {
-        this.normals[tris[i].a] = new Vector()
-        this.normals[tris[i].b] = new Vector()
-        this.normals[tris[i].c] = new Vector()
-      }
-
-      for (i = 0; i < tris.length; i++) {
-        const a = this.vertices[tris[i].a]
-        const b = this.vertices[tris[i].b]
-        const c = this.vertices[tris[i].c]
-
-        const v0 = new Vector(b.x - a.x, b.y - a.y, b.z - a.z)
-        const v1 = new Vector(c.x - a.x, c.y - a.y, c.z - a.z)
-
-        const nx = v0.y*v1.z - v0.z*v1.y
-        const ny = v0.z*v1.x - v0.x*v1.z
-        const nz = v0.x*v1.y - v0.y*v1.x
-
-        tris[i].normal = new Vector(-nx, -ny, -nz).normalize()
-
-        const an = this.normals[tris[i].a]
-        const bn = this.normals[tris[i].b]
-        const cn = this.normals[tris[i].c]
-        this.normals[tris[i].a] = new Vector(an.x + nx, an.y + ny, an.z + nz)
-        this.normals[tris[i].b] = new Vector(bn.x + nx, bn.y + ny, bn.z + nz)
-        this.normals[tris[i].c] = new Vector(cn.x + nx, cn.y + ny, cn.z + nz)
-      }
-
-      for (i = 0; i < this.normals.length; i++) {
-        this.normals[i] = this.normals[i].normalize()
-      }
-
-      for (var i = 0; i < this.triangles.length; i++) {
-        const a = this.vertices[this.triangles[i].a]
-        const b = this.vertices[this.triangles[i].b]
-        const c = this.vertices[this.triangles[i].c]
-
-        v.push(a.x)
-        v.push(a.y)
-        v.push(a.z)
-
-        v.push(b.x)
-        v.push(b.y)
-        v.push(b.z)
-
-        v.push(c.x)
-        v.push(c.y)
-        v.push(c.z)
-
-        const an = this.normals[this.triangles[i].a]
-        const bn = this.normals[this.triangles[i].b]
-        const cn = this.normals[this.triangles[i].c]
-
-        n.push(an.x)
-        n.push(an.y)
-        n.push(an.z)
-
-        n.push(bn.x)
-        n.push(bn.y)
-        n.push(bn.z)
-
-        n.push(cn.x)
-        n.push(cn.y)
-        n.push(cn.z)
-      }
-
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.DYNAMIC_DRAW)
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.nbo)
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(n), gl.DYNAMIC_DRAW)
+    for (i = 0; i < n; i++) {
+      triangles.push((i+1) % n + 1)
+      triangles.push(i+1)
+      triangles.push(0)
     }
 
-    static uvSphere(gl, r, nblong, nblat) {
-      const verts = []
-      const normals = []
+    for (i = 0; i < m - 1; i++) {
+      for (j = 0; j < n; j++) {
+        const a = i*n + j+1
+        const b = a + n
 
-      for (var i = 0; i < (nblong+1) * nblat + 2; i++) {
-        verts.push(new Vector())
-        normals.push(new Vector())
+        triangles.push(a)
+        triangles.push(j == (n-1) ? (a+1-n) : a+1)
+        triangles.push(b)
+
+        triangles.push(j == (n-1) ? (a+1-n) : a+1)
+        triangles.push(j == (n-1) ? (b+1-n) : b+1)
+        triangles.push(b)
       }
-
-      const pi = Math.PI
-      const tau = 2*pi
-
-      verts[0] = new Vector(0, r, 0)
-      for (var lat = 0; lat < nblat; lat++) {
-        var a1 = pi * (lat+1)/(nblat+1)
-        var sin1 = Math.sin(a1)
-        var cos1 = Math.cos(a1)
-
-        for (var lon = 0; lon <= nblong; lon++) {
-          var a2 = tau * (lon == nblong ? 0 : lon) / nblong
-          var sin2 = Math.sin(a2)
-          var cos2 = Math.cos(a2)
-
-          verts[lon + lat * (nblong + 1) + 1] = new Vector(sin1 * cos2, cos1, sin1 * sin2).scale(r)
-        }
-      }
-      verts[verts.length - 1] = new Vector(0, -r, 0)
-
-      for (var n = 0; n < verts.length; n++) {
-        normals[n] = verts[n].normalize()
-      }
-
-      var nbfaces = verts.length
-      var nbtris = nbfaces * 2
-      var nbindices = nbtris * 3
-
-      var tris = []
-
-      for (lon = 0; lon < nblong; lon++) {
-        tris.push(new Triangle(lon + 2, lon + 1, 0))
-
-      }
-
-      for (lat = 0; lat < nblat - 1; lat++) {
-        for (lon = 0; lon < nblong; lon++) {
-          var current = lon + lat * (nblong + 1) + 1
-          var next = current + nblong + 1
-
-          tris.push(new Triangle(current, current + 1, next + 1))
-          tris.push(new Triangle(current, next + 1, next))
-        }
-      }
-
-      for (lon = 0; lon < nblong; lon++) {
-        tris.push(new Triangle(verts.length - 1, verts.length - (lon+2) - 1, verts.length - (lon+1) - 1))
-      }
-
-      return new VertexBuffer(gl, verts, normals, tris)
     }
 
-    static icoSphere(gl, r, n) {
-      // http://wiki.unity3d.com/index.php/ProceduralPrimitives#C.23_-_IcoSphere
+    const k = vertices.length/3
+    for (i = 0; i < n; i++) {
+      triangles.push(k - 1)
+      triangles.push(i == (n-1) ? k - 3 - i + n : k - 3 - i)
+      triangles.push(k - 2 - i)
+    }
 
-      const verts = []
+    return new TriangleMesh(vertices, triangles)
+  }
+}
 
-      const t = (1 + Math.sqrt(5)) / 2
-      verts.push(new Vector(-r,  r*t, 0).normalize())
-      verts.push(new Vector( r,  r*t, 0).normalize())
-      verts.push(new Vector(-r, -r*t, 0).normalize())
-      verts.push(new Vector( r, -r*t, 0).normalize())
+class Camera {
+  constructor() {
+    this.up = vec3.fromValues(0, 1, 0)
 
-      verts.push(new Vector(0, -r,  t).normalize())
-      verts.push(new Vector(0,  r,  t).normalize())
-      verts.push(new Vector(0, -r, -t).normalize())
-      verts.push(new Vector(0,  r, -t).normalize())
+    this.fovDeg = 60
+    this.pos = vec3.create()
+    this.target = vec3.fromValues(0, 0, 1)
+    this.aspect = 1
+    this.zNear = 0.1
+    this.zFar = 100
 
-      verts.push(new Vector( t, 0, -r).normalize())
-      verts.push(new Vector( t, 0,  r).normalize())
-      verts.push(new Vector(-t, 0, -r).normalize())
-      verts.push(new Vector(-t, 0,  r).normalize())
+    this.projectionMatrix = mat4.create()
+    this.viewMatrix = mat4.create()
+  }
 
-      var tris = []
+  fieldOfView(fovDeg) {
+    this.fovDeg = fovDeg
+    return this
+  }
 
-      tris.push(new Triangle(0, 11, 5))
-      tris.push(new Triangle(0, 5, 1))
-      tris.push(new Triangle(0, 1, 7))
-      tris.push(new Triangle(0, 7, 10))
-      tris.push(new Triangle(0, 10, 11))
+  position(x, y, z) {
+    this.pos = vec3.fromValues(x, y, z)
+    return this
+  }
 
-      tris.push(new Triangle(1, 5, 9))
-      tris.push(new Triangle(5, 11, 4))
-      tris.push(new Triangle(11, 10, 2))
-      tris.push(new Triangle(10, 7, 6))
-      tris.push(new Triangle(7, 1, 8))
+  lookAt(x, y, z) {
+    this.target = vec3.fromValues(x, y, z)
+    return this
+  }
 
-      tris.push(new Triangle(3, 9, 4))
-      tris.push(new Triangle(3, 4, 2))
-      tris.push(new Triangle(3, 2, 6))
-      tris.push(new Triangle(3, 6, 8))
-      tris.push(new Triangle(3, 8, 9))
+  update(gl) {
+    const fov = this.fovDeg * Math.PI/180
 
-      tris.push(new Triangle(4, 9, 5))
-      tris.push(new Triangle(2, 4, 11))
-      tris.push(new Triangle(6, 2, 10))
-      tris.push(new Triangle(8, 6, 7))
-      tris.push(new Triangle(9, 8, 1))
+    mat4.perspective(this.projectionMatrix, fov, this.aspect, this.zNear, this.zFar)
+    mat4.lookAt(this.viewMatrix, this.pos, this.target, this.up)
+  }
+}
 
-      function getMiddlePoint(p1, p2, v, cache, r) {
-        const lesserIndex  = p1 < p2 ? p1 : p2
-        const greaterIndex = p1 < p2 ? p2 : p1
-        const key = (lesserIndex << 16) + greaterIndex
+class Shader {
+  constructor(gl, program) {
+    this.gl = gl
+    this.program = program
 
-        if (cache[key]) {
-          return cache[key]
-        }
+    this.positionAttrib = gl.getAttribLocation(program, 'position')
+    this.normalAttrib = gl.getAttribLocation(program, 'normal')
+  }
 
-        const point1 = verts[p1]
-        const point2 = verts[p2]
-        const mp = new Vector((point1.x+point2.x) / 2,
-                              (point1.y+point2.y) / 2,
-                              (point1.z+point2.z) / 2).normalize()
+  uniformMat4(name, value) {
+    const gl = this.gl
 
-        const i = v.length
-        v.push(new Vector(r*mp.x, r*mp.y, r*mp.z))
-        cache[key] = i
-
-        return i
-      }
-
-      var cache = {}
-
-      for (var i = 0; i < n; i++) {
-        const tris2 = tris.slice()
-        for (var j = 0; j < tris.length; j++) {
-          const a = getMiddlePoint(tris[j].a, tris[j].b, verts, cache, r)
-          const b = getMiddlePoint(tris[j].b, tris[j].c, verts, cache, r)
-          const c = getMiddlePoint(tris[j].c, tris[j].a, verts, cache, r)
-
-          tris2.push(new Triangle(tris[j].a, a, c))
-          tris2.push(new Triangle(tris[j].b, b, a))
-          tris2.push(new Triangle(tris[j].c, c, b))
-          tris2.push(new Triangle(a, b, c))
-        }
-
-        tris = tris2
-      }
-
-      const normals = verts
-      return new VertexBuffer(gl, verts, normals, tris)
+    const l = gl.getUniformLocation(this.program, name)
+    if (l) {
+      gl.uniformMatrix4fv(l, false, value)
     }
   }
 
-  class Shader {
-    constructor(gl, fsSrc, vsSrc) {
-      this.gl = gl
+  static fromSources(gl, fsSrc, vsSrc) {
+    const fs = gl.createShader(gl.FRAGMENT_SHADER)
+    const vs = gl.createShader(gl.VERTEX_SHADER)
 
-      this.fsSrc = fsSrc
-      this.vsSrc = vsSrc
+    gl.shaderSource(fs, fsSrc)
+    gl.compileShader(fs)
 
-      const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSrc)
-      const vs = compileShader(gl, gl.VERTEX_SHADER, vsSrc)
-
-      const prog = gl.createProgram()
-      gl.attachShader(prog, fs)
-      gl.attachShader(prog, vs)
-      gl.linkProgram(prog)
-
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-        alert('Could not link shader program.')
-      }
-
-      this.fs = fs
-      this.vs = vs
-      this.program = prog
-    }
-
-    setAttrib(name, value) {
-      const loc = this.gl.getAttribLocation(this.program, name)
-    }
-
-    setUniformMat4(name, value) {
-      const loc = this.gl.getUniformLocation(this.program, name)
-      this.gl.uniformMatrix4fv(loc, false, value)
-    }
-  }
-
-  class Renderer {
-    constructor(canvas) {
-      this.canvas = canvas
-      this.gl = canvas.getContext('webgl')
-      this.isRendering = false
-      this.vertexBuffers = []
-
-      this.init()
-
-      this.rotation = 0
-      this.displaceTimer = 3
-      this.displacementScale = 1
-      this.counter = 10000  +1
-
-      this.cx = 0
-      this.cy = 0
-      this.cz = 0
-    }
-
-    init() {
-      const gl = this.gl
-
-      if (!gl) {
-        alert('Could not initialize WebGL.')
-      }
-
-      gl.clearColor(1, 1, 1, 1)
-
-      gl.enable(gl.CULL_FACE)
-      gl.cullFace(gl.BACK)
-
-      gl.enable(gl.DEPTH_TEST)
-    }
-
-    start() {
-      if (this.isRendering) {
-        return
-      }
-
-      this.isRendering = true
-      requestAnimationFrame(() => this.drawFrame())
-    }
-
-    stop() {
-      this.isRendering = false
-    }
-
-    addVertexBuffer(vb) {
-      this.vertexBuffers.push(vb)
-    }
-
-    setShader(shader) {
-      this.shader = shader
-      this.gl.useProgram(shader.program)
-    }
-
-    setVertexBuffer(vb) {
-      const gl = this.gl
-
-      var loc = gl.getAttribLocation(this.shader.program, 'aPosition')
-      gl.bindBuffer(gl.ARRAY_BUFFER, vb.vbo)
-      gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0)
-      gl.enableVertexAttribArray(loc)
-
-      loc = gl.getAttribLocation(this.shader.program, 'aNormal')
-      gl.bindBuffer(gl.ARRAY_BUFFER, vb.nbo)
-      gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0)
-      gl.enableVertexAttribArray(loc)
-    }
-
-    doDisplacement() {
-      const vb = this.vertexBuffers[0]
-
-      this.counter -= 1
-      if (this.counter == 0) {
-        for (var i = 0; i < vb.vertices.length; i++) {
-          if (vb.vertices[i].length() < 0.997) {
-            vb.vertices[i] = vb.vertices[i].normalize().scale(0.997 + Math.random()*0.001)
-          }
-        }
-
-        vb.update()
-        return
-      }
-
-      if (this.displacementScale < 0.01) {
-        this.displacementScale = -1
-
-        vb.update()
-        return
-      }
-
-      var nx = Math.random() - 0.5
-      var ny = Math.random() - 0.5
-      var nz = Math.random() - 0.5
-      var n = new Vector(nx, ny, nz).normalize()
-      nx = n.x
-      ny = n.y
-      nz = n.z
-
-      const q = Math.random() - 0.5
-      this.cx = q*nx
-      this.cy = q*ny
-      this.cz = q*nz
-
-      for (var i = 0; i < vb.vertices.length; i++) {
-        const x = vb.vertices[i].x - this.cx
-        const y = vb.vertices[i].y - this.cy
-        const z = vb.vertices[i].z - this.cz
-
-        const d = x*nx + y*ny + z*nz
-        var f = 0
-        if (d < -0.0001) {
-          f = 0.0004
-        } else if (d > 0.0001) {
-          f = -0.0004
-        }
-        else {
-          continue
-        }
-
-        var dir = vb.vertices[i].normalize().scale(f)
-
-        vb.vertices[i].x += dir.x * this.displacementScale
-        vb.vertices[i].y += dir.y * this.displacementScale
-        vb.vertices[i].z += dir.z * this.displacementScale
-
-        // if (vb.vertices[i].length() < 0.99) {
-        //   vb.vertices[i] = vb.vertices[i].normalize().scale(0.99)
-        // }
-
-      }
-    }
-
-    drawFrame() {
-      this.displaceTimer -= 1/60
-      if (this.displaceTimer <= 0) {
-        this.displaceTimer = 1.0
-
-        if (this.counter > 0) {
-        if (this.displacementScale > 0) {
-          this.vertexBuffers[0].update()
-        }
-        }
-      }
-
-      if (this.counter > 0) {
-        if (this.displacementScale > 0) {
-          this.doDisplacement()
-          this.doDisplacement()
-          this.doDisplacement()
-          this.doDisplacement()
-          this.doDisplacement()
-        }
-      }
-
-      if (this.isRendering) {
-        requestAnimationFrame(() => this.drawFrame())
-      }
-
-      this.canvas.width = this.canvas.offsetWidth
-      this.canvas.height = this.canvas.offsetHeight
-
-      const gl = this.gl
-
-      this.rotation += 0.05 * 2*Math.PI/60
-
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-      gl.viewport(0, 0, this.canvas.width, this.canvas.height)
-
-      const fov = 45 * Math.PI / 180
-      const aspect = this.canvas.width / this.canvas.height
-      const zNear = 0.1
-      const zFar = 100
-      const projection = mat4.create()
-      const modelView = mat4.create()
-
-      mat4.perspective(projection, fov, aspect, zNear, zFar)
-      mat4.translate(modelView, modelView, vec3.fromValues(0, 0, -5))
-      mat4.rotate(modelView, modelView, this.rotation, vec3.fromValues(0, 1, 0))
-
-      const shader = this.shader
-      shader.setUniformMat4('uModelView', modelView)
-      shader.setUniformMat4('uProjection', projection)
-
-      for (var i = 0; i < this.vertexBuffers.length; i++) {
-        this.setVertexBuffer(this.vertexBuffers[i])
-        gl.drawArrays(gl.TRIANGLES, 0, this.vertexBuffers[i].triangles.length * 3)
-      }
-    }
-  }
-
-  function compileShader(gl, type, source) {
-    const shader = gl.createShader(type)
-
-    gl.shaderSource(shader, source)
-    gl.compileShader(shader)
-
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      alert('Could not compile shader: \n\n' + gl.getShaderInfoLog(shader))
-      gl.deleteShader(shader)
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      alert('Could not compile shader: \n\n' + gl.getShaderInfoLog(fs))
+      gl.deleteShader(fs)
       return undefined
     }
 
-    return shader
+    gl.shaderSource(vs, vsSrc)
+    gl.compileShader(vs)
+
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+      alert('Could not compile shader: \n\n' + gl.getShaderInfoLog(vs))
+      gl.deleteShader(fs)
+      gl.deleteShader(vs)
+      return undefined
+    }
+
+    const program = gl.createProgram()
+
+    gl.attachShader(program, fs)
+    gl.attachShader(program, vs)
+    gl.linkProgram(program)
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      alert('Could not link shader program.')
+      gl.deleteProgram(program)
+      gl.deleteShader(fs)
+      gl.deleteShader(vs)
+      return undefined
+    }
+
+    return new Shader(gl, program)
+  }
+}
+
+class Renderer {
+  constructor(canvas) {
+    const gl = canvas.getContext('webgl')
+
+    this.canvas = canvas
+    this.gl = gl
+
+    this.camera = null
+    this.meshes = []
+    this.shader = null
+
+    gl.clearColor(1, 1, 1, 1)
+
+    gl.enable(gl.CULL_FACE)
+    gl.cullFace(gl.BACK)
+
+    gl.enable(gl.DEPTH_TEST)
+
+    if (!gl.getExtension('OES_element_index_uint')) {
+      console.error('OES_element_index_uint extension not available')
+    }
   }
 
-  function main() {
-    const canvas = document.getElementById('canvas')
-    const renderer = new Renderer(canvas)
+  start() {
+    if (this.isRendering) {
+      return
+    }
 
-    const fsSrc = document.getElementById('fs-source').text
-    const vsSrc = document.getElementById('vs-source').text
-
-    const shader = new Shader(renderer.gl, fsSrc, vsSrc)
-    renderer.setShader(shader)
-
-    const vb = VertexBuffer.uvSphere(renderer.gl, 1, 1200, 600)//new VertexBuffer(renderer.gl, vertices, triangles)
-    renderer.addVertexBuffer(vb)
-
-    renderer.start()
+    this.isRendering = true
+    requestAnimationFrame(() => this.render())
   }
 
-  main()
-})()
+  stop() {
+    if (!this.isRendering) {
+      return
+    }
+
+    this.isRendering = false
+  }
+
+  render() {
+    if (!this.camera) {
+      console.error('no camera set')
+      this.stop()
+    }
+
+    if (!this.shader) {
+      console.error('no shader set')
+      this.stop()
+    }
+
+    if (!this.isRendering) {
+      return
+    }
+
+    requestAnimationFrame(() => this.render())
+
+    const canvas = this.canvas
+    const gl = this.gl
+    const camera = this.camera
+    const meshes = this.meshes
+    const shader = this.shader
+
+    canvas.width = canvas.offsetWidth
+    canvas.height = canvas.offsetHeight
+
+    gl.viewport(0, 0, canvas.width, canvas.height)
+
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+    camera.aspect = canvas.width / canvas.height
+    camera.update(gl)
+
+    gl.useProgram(shader.program)
+
+    shader.uniformMat4('projection', camera.projectionMatrix)
+    shader.uniformMat4('view', camera.viewMatrix)
+
+    for (var i = 0; i < meshes.length; i++) {
+      const mesh = meshes[i]
+
+      if (mesh.requiresUpdate) {
+        mesh.updateBuffers(gl)
+      }
+
+      shader.uniformMat4('model', mesh.modelMatrix)
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer)
+      gl.vertexAttribPointer(shader.positionAttrib, 3, gl.FLOAT, false, 0, 0)
+      gl.enableVertexAttribArray(shader.positionAttrib)
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normalBuffer)
+      gl.vertexAttribPointer(shader.normalAttrib, 3, gl.FLOAT, false, 0, 0)
+      gl.enableVertexAttribArray(shader.normalAttrib)
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer)
+
+      gl.drawElements(gl.TRIANGLES, mesh.triangles.length, gl.UNSIGNED_INT, 0)
+    }
+  }
+}
+
+function applyIteration(trimesh) {
+  const k = 0.0002
+
+  const nx = Math.random() - 0.5
+  const ny = Math.random() - 0.5
+  const nz = Math.random() - 0.5
+
+  const a = Math.random() > 0.5 ? 1 : -1
+  const cx = a*nx
+  const cy = a*ny
+  const cz = a*nz
+
+  const vertices = trimesh.vertices
+
+  for (var i = 0; i < vertices.length; i += 3) {
+    var x = vertices[i]
+    var y = vertices[i+1]
+    var z = vertices[i+2]
+
+    const d = (x-cx)*nx + (y-cy)*ny + (z-cz)*nz
+
+    const r = Math.sqrt(x*x + y*y + z*z)
+    const rx = x/r
+    const ry = y/r
+    const rz = z/r
+
+    if (d < 0) {
+      x += k*rx
+      y += k*ry
+      z += k*rz
+    } else if (d > 0) {
+      x -= k*rx
+      y -= k*ry
+      z -= k*rz
+    }
+
+    vertices[i  ] = x
+    vertices[i+1] = y
+    vertices[i+2] = z
+  }
+
+  trimesh.requiresUpdate = true
+}
+
+function main() {
+  const canvas = document.getElementById('canvas')
+  const renderer = new Renderer(canvas)
+
+  renderer.camera = new Camera().fieldOfView(60).position(0, 1, 3).lookAt(0, 0, 0)
+
+  const fsSrc = document.getElementById('fs-source').text
+  const vsSrc = document.getElementById('vs-source').text
+  renderer.shader = Shader.fromSources(renderer.gl, fsSrc, vsSrc)
+
+  const sphere = TriangleMesh.sphere(1, 640, 1280)
+  renderer.meshes = [ sphere ]
+
+  renderer.start()
+
+  var rotation = 0
+  var anim = () => {
+    mat4.fromRotation(sphere.modelMatrix, rotation, vec3.fromValues(0, 1, 0))
+
+    rotation += 1/40 * 2*Math.PI/60
+
+    if (rotation >= 2*Math.PI) {
+      rotation -= 2*Math.PI
+    }
+
+    requestAnimationFrame(() => anim())
+  }
+
+  requestAnimationFrame(() => anim())
+
+  var generateLandscapes = () => {
+    applyIteration(sphere)
+    requestAnimationFrame(() => generateLandscapes())
+  }
+
+  setTimeout(() => generateLandscapes(), 1000)
+}
+
+main()
