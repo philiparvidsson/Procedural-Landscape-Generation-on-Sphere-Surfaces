@@ -372,9 +372,7 @@ class Renderer {
   }
 }
 
-function applyIteration(trimesh) {
-  const k = 0.0002
-
+function applyIteration(trimesh, k) {
   const nx = Math.random() - 0.5
   const ny = Math.random() - 0.5
   const nz = Math.random() - 0.5
@@ -387,7 +385,7 @@ function applyIteration(trimesh) {
   const vertices = trimesh.vertices
 
   for (var i = 0; i < vertices.length; i += 3) {
-    var x = vertices[i]
+    var x = vertices[i  ]
     var y = vertices[i+1]
     var z = vertices[i+2]
 
@@ -446,8 +444,11 @@ function main() {
 
   requestAnimationFrame(() => anim())
 
+  var strength = 0.001
   var generateLandscapes = () => {
-    applyIteration(sphere)
+    applyIteration(sphere, strength)
+    strength *= 0.999
+
     requestAnimationFrame(() => generateLandscapes())
   }
 
