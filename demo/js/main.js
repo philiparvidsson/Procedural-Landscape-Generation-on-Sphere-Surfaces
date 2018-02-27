@@ -445,11 +445,18 @@ function main() {
   requestAnimationFrame(() => anim())
 
   var strength = 0.001
+  var iterationsPerSecond = 1
   var generateLandscapes = () => {
     applyIteration(sphere, strength)
-    strength *= 0.999
 
-    requestAnimationFrame(() => generateLandscapes())
+    strength *= 0.999
+    iterationsPerSecond += 0.2
+    if (iterationsPerSecond >= 60) {
+      iterationsPerSecond = 60
+      requestAnimationFrame(() => generateLandscapes())
+    } else {
+      setTimeout(() => generateLandscapes(), 1000/iterationsPerSecond)
+    }
   }
 
   setTimeout(() => generateLandscapes(), 1000)
